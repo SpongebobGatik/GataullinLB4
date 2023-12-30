@@ -46,6 +46,22 @@ void thread_func_spinlock(std::atomic_flag& flag, int thread_num) {
     flag.clear(std::memory_order_release);
 }
 
+// Функция для потока, использующая SpinWait
+void thread_func_spinwait(std::atomic_flag& flag, int thread_num) {
+    while (flag.test_and_set(std::memory_order_acquire)); // SpinWait
+    // Критическая секция
+    std::cout << "Thread " << thread_num << ": " << random_ascii() << std::endl;
+    flag.clear(std::memory_order_release);
+}
+
+// Функция для потока, использующая SemaphoreSlim
+void thread_func_semaphoreslim(std::counting_semaphore<>& sem, int thread_num) {
+    sem.acquire();
+    // Критическая секция
+    std::cout << "Thread " << thread_num << ": " << random_ascii() << std::endl;
+    sem.release();
+}
+
 // Функция для потока, использующая Monitor (через std::unique_lock)
 void thread_func_monitor(std::mutex& mtx, int thread_num) {
     std::unique_lock<std::mutex> lock(mtx);
@@ -59,7 +75,7 @@ int main() {
     std::string sync_primitive;
     std::cout << "Введите количество потоков: ";
     std::cin >> num_threads;
-    std::cout << "Введите примитив синхронизации (Mutexes, Semaphore, Barrier, SpinLock, Monitor): ";
+    std::cout << "Введите примитив синхронизации (Mutexes, Semaphore, Barrier, SpinLock, Monitor, SpinWait, SemaphoreSlim): ";
     std::cin >> sync_primitive;
     std::vector<std::thread> threads;
     threads.reserve(num_threads);
@@ -71,9 +87,21 @@ int main() {
         }
     }
     else if (sync_primitive == "Semaphore") {
-        std::counting_semaphore<> sem(1); // Разрешить одновременный доступ одного потока
+        std::counting_semaphore<> sem(3); // Разрешить одновременный доступ трех потоков
         for (int i = 0; i < num_threads; ++i) {
             threads.emplace_back(thread_func_semaphore, std::ref(sem), i);
+        }
+    }
+    else if (sync_primitive == "SpinWait") {
+        std::atomic_flag flag = ATOMIC_FLAG_INIT;
+        for (int i = 0; i < num_threads; ++i) {
+            threads.emplace_back(thread_func_spinwait, std::ref(flag), i);
+        }
+    }
+    else if (sync_primitive == "SemaphoreSlim") {
+        std::counting_semaphore<> sem(1); // Разрешить одновременный доступ одного потока
+        for (int i = 0; i < num_threads; ++i) {
+            threads.emplace_back(thread_func_semaphoreslim, std::ref(sem), i);
         }
     }
     else if (sync_primitive == "Barrier") {
